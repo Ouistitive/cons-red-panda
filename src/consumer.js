@@ -1,7 +1,14 @@
 import { Kafka } from 'kafkajs';
+import {createClient} from 'redis';
 import {getLocalBroker, getTopic} from "./config/config.js";
+import {redisOptions} from "./config/configRedis.js";
 
 const isLocalBroker = getLocalBroker();
+
+const client = await createClient(redisOptions);
+client.on('error', err => console.log('Redis Client Error', err));
+
+await client.connect();
 
 const redpanda = new Kafka({
     brokers: [
@@ -10,19 +17,30 @@ const redpanda = new Kafka({
     ]
 });
 
-const consumer = redpanda.consumer({groupId: 'test-group-7'});
+const consumer = redpanda.consumer({groupId: 'mon-super-groupe'});
 
 connexion()
 
 async function connexion() {
     try {
-        await consumer.connect()
-        await consumer.subscribe({ topic: getTopic(), fromBeginning: true })
+        await consumer.connect();
+        await consumer.subscribe({ topic: getTopic(), fromBeginning: true });
 
         await consumer.run({
             eachMessage: async ({ topic, partition, message }) => {
                 const messageJson = JSON.parse(message.value)
 
+                const tabMot = messageJson.message.split(" ")
+
+                tabMot.forEach((mot) => {
+                    client.incr(mot, (err, newValue) => {
+                        if (err) {
+                            console.error('Erreur lors de l\'incrémentation :', err);
+                        } else {
+                            console.log('Nouvelle valeur incrémentée :', newValue);
+                        }
+                    });
+                });
 
                 console.log({
                     value: messageJson.message,
